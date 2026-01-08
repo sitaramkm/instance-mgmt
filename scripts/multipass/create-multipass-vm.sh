@@ -46,10 +46,12 @@ EOF
 fi
 
 SERVER_IP="$(multipass info "${SERVER_NAME}" | awk '/IPv4/{print $2}')"
+SERVER_PUBLIC_IP="${SERVER_IP}"
 
 # ---------- Agents ----------
 AGENT_NAMES=()
 AGENT_IPS=()
+AGENT_PUBLIC_IPS=()
 
 for i in $(seq 1 "${NUM_AGENTS}"); do
   NAME="${AGENT_NAME_PREFIX}-${i}"
@@ -76,21 +78,29 @@ runcmd:
 EOF
 )
   fi
-
-  AGENT_IPS+=( "$(multipass info "${NAME}" | awk '/IPv4/{print $2}')" )
+  ip="$(multipass info "${NAME}" | awk '/IPv4/{print $2}')"
+  AGENT_IPS+=( "${ip}" )
+  AGENT_PUBLIC_IPS+=( "${ip}" )
 done
 
 # ---------- Write instances.env ----------
 ENV_FILE="${ROOT_DIR}/instances.env"
 
 cat > "${ENV_FILE}" <<EOF
+# ===================== Multipass =====================
+# instances.env generated on $(date) by create-multipass-vm.sh
+
 export PROVIDER="multipass"
 
 export SERVER_NAME="${SERVER_NAME}"
 export SERVER_IP="${SERVER_IP}"
+# For SSH access
+export SERVER_PUBLIC_IP="${SERVER_PUBLIC_IP}"
 
 export AGENT_NAMES=(${AGENT_NAMES[*]})
 export AGENT_IPS=(${AGENT_IPS[*]})
+# For SSH access
+export AGENT_PUBLIC_IPS=(${AGENT_PUBLIC_IPS[*]})
 
 export SSH_USER="${SSH_USER}"
 export SSH_KEY_PRIVATE="${SSH_KEY_ABS}"
@@ -101,12 +111,13 @@ echo "Wrote ${ENV_FILE}"
 {
   echo
   echo "# ================= SSH ACCESS ================="
+  echo "#               For quick copy/paste"
   echo "# Server:"
   echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_IP}"
   echo "#"
-  for i in "${!AGENT_IPS[@]}"; do
+  for i in "${!AGENT_PUBLIC_IPS[@]}"; do
     echo "# Agent ${AGENT_NAMES[$i]}:"
-    echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_IPS[$i]}"
+    echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_PUBLIC_IPS[$i]}"
   done
   echo "# =============================================="
 } >> "${ENV_FILE}"
@@ -117,8 +128,8 @@ echo "================ SSH ACCESS ================"
 echo "Server:"
 echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_IP}"
 echo
-for i in "${!AGENT_IPS[@]}"; do
+for i in "${!AGENT_PUBLIC_IPS[@]}"; do
   echo "Agent ${AGENT_NAMES[$i]}:"
-  echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_IPS[$i]}"
+  echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_PUBLIC_IPS[$i]}"
 done
 echo "============================================"

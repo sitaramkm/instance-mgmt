@@ -119,7 +119,14 @@ launch_instance() {
     --output text
 }
 
-instance_ip() {
+instance_private_ip() {
+  aws_ec2 describe-instances \
+    --instance-ids "$1" \
+    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+    --output text
+}
+
+instance_public_ip() {
   aws_ec2 describe-instances \
     --instance-ids "$1" \
     --query 'Reservations[0].Instances[0].PublicIpAddress' \
@@ -148,25 +155,35 @@ done
 
 aws_ec2 wait instance-running --instance-ids "${SERVER_ID}" "${AGENT_IDS[@]}"
 
-SERVER_IP="$(instance_ip "${SERVER_ID}")"
+SERVER_IP="$(instance_private_ip "${SERVER_ID}")"
+SERVER_PUBLIC_IP="$(instance_public_ip "${SERVER_ID}")"
+
 AGENT_IPS=()
 for id in "${AGENT_IDS[@]}"; do
-  AGENT_IPS+=( "$(instance_ip "${id}")" )
+  AGENT_IPS+=( "$(instance_private_ip "${id}")" )
+  AGENT_PUBLIC_IPS+=( "$(instance_public_ip "${id}")" )
 done
 
 # ---------- Write instances.env ----------
 ENV_FILE="${ROOT_DIR}/instances.env"
 
 cat > "${ENV_FILE}" <<EOF
+# ===================== AWS =====================
+# instances.env generated on $(date) by create-aws-vm.sh
+
 export PROVIDER="aws"
 
 export SERVER_INSTANCE_ID="${SERVER_ID}"
 export SERVER_NAME="${SERVER_NAME}"
 export SERVER_IP="${SERVER_IP}"
+# For SSH access
+export SERVER_PUBLIC_IP="${SERVER_PUBLIC_IP}"
 
 export AGENT_INSTANCE_IDS=(${AGENT_IDS[*]})
 export AGENT_NAMES=($(seq 1 "${NUM_AGENTS}" | sed "s/^/${AGENT_NAME_PREFIX}-/"))
 export AGENT_IPS=(${AGENT_IPS[*]})
+# For SSH access
+export AGENT_PUBLIC_IPS=(${AGENT_PUBLIC_IPS[*]})
 
 export SSH_USER="${SSH_USER}"
 export SSH_KEY_PRIVATE="${SSH_KEY_ABS}"
@@ -177,12 +194,13 @@ echo "Wrote ${ENV_FILE}"
 {
   echo
   echo "# ================= SSH ACCESS ================="
+  echo "#               For quick copy/paste"
   echo "# Server:"
-  echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_IP}"
+  echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_PUBLIC_IP}"
   echo "#"
-  for i in "${!AGENT_IPS[@]}"; do
+  for i in "${!AGENT_PUBLIC_IPS[@]}"; do
     echo "# Agent ${AGENT_NAME_PREFIX[$i]}:"
-    echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_IPS[$i]}"
+    echo "#   ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_PUBLIC_IPS[$i]}"
   done
   echo "# =============================================="
 } >> "${ENV_FILE}"
@@ -195,10 +213,10 @@ echo "==> Applying default ingress using ec2-allow.sh"
 echo
 echo "================ SSH ACCESS ================"
 echo "Server:"
-echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_IP}"
+echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${SERVER_PUBLIC_IP}"
 echo
-for i in "${!AGENT_IPS[@]}"; do
+for i in "${!AGENT_PUBLIC_IPS[@]}"; do
   echo "Agent ${AGENT_NAME_PREFIX}-$((i+1)) :"
-  echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_IPS[$i]}"
+  echo "  ssh -i '${SSH_KEY_ABS}' ${SSH_USER}@${AGENT_PUBLIC_IPS[$i]}"
 done
 echo "============================================"
