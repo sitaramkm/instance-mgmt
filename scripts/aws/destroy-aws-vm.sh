@@ -35,7 +35,7 @@ aws_ec2() {
   aws ec2 --region "${AWS_REGION}" --profile "${AWS_PROFILE}" "$@"
 }
 
-echo "==> Destroying EC2 instances (scoped to instances.env)"
+echo "==> Destroying EC2 instances (using ${INSTANCES_ENV})"
 
 # ------------------------------------------------------------
 # Terminate instances
@@ -70,7 +70,7 @@ echo "==> Deleting security groups"
 
 echo "--> Deleting server SG: ${SERVER_SECURITY_GROUP_ID}"
 aws_ec2 delete-security-group \
-  --group-id "${SERVER_SECURITY_GROUP_ID}"
+  --group-id "${SERVER_SECURITY_GROUP_ID}" 
 
 echo "--> Deleting agent SG: ${AGENT_SECURITY_GROUP_ID}"
 aws_ec2 delete-security-group \

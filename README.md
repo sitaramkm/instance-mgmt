@@ -6,7 +6,7 @@
   - GCP (TODO)
   - Azure (TODO)
 
-This repository provides simple, readable shell scripts to create and destroy
+This repository provides simple shell scripts to create and destroy
 **Ubuntu-based server and agent VMs** locally (Multipass) or in **AWS EC2**.
 
 It supports:

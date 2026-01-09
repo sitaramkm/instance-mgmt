@@ -19,12 +19,12 @@ confirm() {
 case "${TARGET}" in
   multipass)
     [[ "${FLAG:-}" == "--yes" ]] || confirm || exit 1
-    echo "==> Cleaning up Multipass instances (scoped to instances.env)"
+    echo "==> Cleaning up Multipass instances (scoped to mp-instances.env)"
     "${SCRIPT_DIR}/multipass/destroy-multipass-vm.sh"
     ;;
   aws)
     [[ "${FLAG:-}" == "--yes" ]] || confirm || exit 1
-    echo "==> Cleaning up EC2 instances (scoped to instances.env)"
+    echo "==> Cleaning up EC2 instances (scoped to ec2-instances.env)"
     "${SCRIPT_DIR}/aws/destroy-aws-vm.sh"
     ;;
   *)
