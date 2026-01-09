@@ -84,24 +84,27 @@ EOF
 done
 
 # ---------- Write instances.env ----------
-ENV_FILE="${ROOT_DIR}/instances.env"
+
+ENV_FILE="${ROOT_DIR}/mp-instances.env"
 
 cat > "${ENV_FILE}" <<EOF
 # ===================== Multipass =====================
-# instances.env generated on $(date) by create-multipass-vm.sh
+# ${ENV_FILE} 
+# Generated on $(date) by create-multipass-vm.sh
 
 export PROVIDER="multipass"
 
+# Server details
 export SERVER_NAME="${SERVER_NAME}"
 export SERVER_IP="${SERVER_IP}"
-# For SSH access
 export SERVER_PUBLIC_IP="${SERVER_PUBLIC_IP}"
 
+# Agent details
 export AGENT_NAMES=(${AGENT_NAMES[*]})
 export AGENT_IPS=(${AGENT_IPS[*]})
-# For SSH access
 export AGENT_PUBLIC_IPS=(${AGENT_PUBLIC_IPS[*]})
 
+# SSH details
 export SSH_USER="${SSH_USER}"
 export SSH_KEY_PRIVATE="${SSH_KEY_ABS}"
 EOF

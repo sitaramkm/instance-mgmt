@@ -165,28 +165,38 @@ for id in "${AGENT_IDS[@]}"; do
 done
 
 # ---------- Write instances.env ----------
-ENV_FILE="${ROOT_DIR}/instances.env"
+ENV_FILE="${ROOT_DIR}/ec2-instances.env"
 
 cat > "${ENV_FILE}" <<EOF
 # ===================== AWS =====================
-# instances.env generated on $(date) by create-aws-vm.sh
+# ${ENV_FILE} 
+# Generated on $(date) by create-aws-vm.sh
 
 export PROVIDER="aws"
+# AWS context
+export AWS_REGION="${AWS_REGION}"
+export AWS_PROFILE="${AWS_PROFILE}"
 
+#Server details
 export SERVER_INSTANCE_ID="${SERVER_ID}"
 export SERVER_NAME="${SERVER_NAME}"
 export SERVER_IP="${SERVER_IP}"
-# For SSH access
 export SERVER_PUBLIC_IP="${SERVER_PUBLIC_IP}"
 
+# Agent details
 export AGENT_INSTANCE_IDS=(${AGENT_IDS[*]})
 export AGENT_NAMES=($(seq 1 "${NUM_AGENTS}" | sed "s/^/${AGENT_NAME_PREFIX}-/"))
 export AGENT_IPS=(${AGENT_IPS[*]})
-# For SSH access
 export AGENT_PUBLIC_IPS=(${AGENT_PUBLIC_IPS[*]})
 
+# Security Groups
+export SERVER_SECURITY_GROUP_ID="${SERVER_SG}"
+export AGENT_SECURITY_GROUP_ID="${AGENT_SG}"
+
+# SSH details
 export SSH_USER="${SSH_USER}"
 export SSH_KEY_PRIVATE="${SSH_KEY_ABS}"
+
 EOF
 
 echo "Wrote ${ENV_FILE}"

@@ -52,19 +52,21 @@ VM_DISK=20G
 
 ```bash
 # Local VMs
-./create-vm.sh multipass
+./scripts/create-vm.sh multipass
 
 # EC2 (standard agents)
-./create-vm.sh aws
+❯ ./scripts/create-vm.sh aws
+ERROR: AWS CLI is not authenticated.
+Run: aws configure or aws sso login
 
 # With AI / Ollama agents (will use a bigger VM)
-./create-vm.sh aws --ai
+./scripts/create-vm.sh aws --ai
 
 # Access VM's
 ssh -i '/full/path/.ssh/ec2_rsa' ubuntu@<server-ip>
 ssh -i '/full/path/.ssh/ec2_rsa' ubuntu@<agent-ip>
 
-./destroy-vm.sh <provider> [multipass, aws]
+./scripts/destroy-vm.sh <provider> [multipass, aws]
 ```
 
 ## Install Ollama 
@@ -78,21 +80,25 @@ What it does:
 
 ```bash
 # Install ollama 
-./install-ollama.sh <agent-public-ip>
+./scripts/install-llm.sh <agent-public-ip>
 
 # Example
-./install-ollama.sh 3.145.xxx.xxx
+./scripts/install-llm.sh 3.145.xxx.xxx
 ```
 
 ## instances.env (Generated File)
-After VM creation, instances.env is generated.
+After VM creation, **[PROVIDER]-instances.env** is generated.
+
+For e.g `mp-instances.env`, `ec2-instances.env`, etc.
 
 It contains:
 - SSH key path
 - SSH user
 - Instance IPs
+- Security groups
+- Provider context
 
-## Allowing additional IPs / CIDRS 
+## Allowing additional IPs / CIDRS (non Multipass)
 Applies to:
 - SSH (22)
 - Ollama (11434, agents only)

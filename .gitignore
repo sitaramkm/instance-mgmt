@@ -1,5 +1,5 @@
 .generated
-instances.env
+*-instances.env
 .ssh
 .DS_Store
 .vscode
