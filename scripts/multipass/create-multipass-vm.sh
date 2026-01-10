@@ -35,7 +35,7 @@ users:
   sudo: ALL=(ALL) NOPASSWD:ALL
   ssh_authorized_keys:
     - ${PUBKEY}
-packages: [ufw, openssh-server]
+packages: [ufw, openssh-server, net-tools]
 runcmd:
 - systemctl enable --now ssh
 - ufw allow OpenSSH
@@ -70,11 +70,42 @@ users:
   sudo: ALL=(ALL) NOPASSWD:ALL
   ssh_authorized_keys:
     - ${PUBKEY}
-packages: [ufw, openssh-server, curl]
+package_update: true
+packages:
+  - ufw
+  - openssh-server
+  - net-tools
+  - curl
+  - unzip
+  - python3
+  - python3-pip
+  - python3-venv
+  - git
+  - build-essential
+
 runcmd:
-- systemctl enable --now ssh
-- ufw allow OpenSSH
-- ufw --force enable
+  - systemctl enable --now ssh
+  - ufw allow OpenSSH
+  - ufw --force enable
+
+  - echo "==> Installing AWS CLI (arch-aware)"
+  - |
+      set -e
+      ARCH="\$(uname -m)"
+      if [[ "\${ARCH}" == "aarch64" || "\${ARCH}" == "arm64" ]]; then
+        AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+      else
+        AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+      fi
+      curl -fsSL "\${AWSCLI_ZIP_URL}" -o "/tmp/awscliv2.zip"
+      rm -rf /tmp/awscliv2
+      unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2
+      sudo /tmp/awscliv2/aws/install || sudo /tmp/awscliv2/aws/install --update
+      aws --version
+      rm -rf /tmp/awscliv2 /tmp/awscliv2.zip
+
+  - echo "==> Installing Python packages"
+  - pip3 install --no-cache-dir requests boto3
 EOF
 )
   fi

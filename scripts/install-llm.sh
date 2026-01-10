@@ -6,7 +6,7 @@ IP="${1:?Usage: ./install-ollama.sh <agent-ip>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-ENV_FILE="${ROOT_DIR}/instances.env"
+ENV_FILE="${ROOT_DIR}/ec2-instances.env"
 
 # ---------- Pre-flight ----------
 [[ -f "${ENV_FILE}" ]] || {
