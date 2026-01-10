@@ -213,6 +213,7 @@ export SERVER_IP="${SERVER_IP}"
 export SERVER_PUBLIC_IP="${SERVER_PUBLIC_IP}"
 
 # Agent details
+export AGENT_NAME_PREFIX="${AGENT_NAME_PREFIX}"
 export AGENT_INSTANCE_IDS=(${AGENT_IDS[*]})
 export AGENT_NAMES=($(seq 1 "${NUM_AGENTS}" | sed "s/^/${AGENT_NAME_PREFIX}-/"))
 export AGENT_IPS=(${AGENT_IPS[*]})
