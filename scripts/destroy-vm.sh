@@ -27,10 +27,17 @@ case "${TARGET}" in
     echo "==> Cleaning up EC2 instances (scoped to ec2-instances.env)"
     "${SCRIPT_DIR}/aws/destroy-aws-vm.sh"
     ;;
+  gcp)
+    [[ "${FLAG:-}" == "--yes" ]] || confirm || exit 1
+    echo "==> Cleaning up GCP instances (scoped to gcp-instances.env)"
+    "${SCRIPT_DIR}/gcp/destroy-gcp-vm.sh"
+    ;;
+
   *)
     echo "Usage:"
     echo "  $0 multipass [--yes]"
     echo "  $0 aws [--yes]"
+    echo "  $0 gcp [--yes]"
     exit 1
     ;;
 esac

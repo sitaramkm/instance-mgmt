@@ -14,10 +14,14 @@ case "${PROVIDER}" in
   aws)
     "${SCRIPT_DIR}/aws/create-aws-vm.sh" "$@"
     ;;
+  gcp)
+    "${SCRIPT_DIR}/gcp/create-gcp-vm.sh" "$@"
+    ;;
   *)
     echo "Usage:"
     echo "  $0 multipass"
     echo "  $0 aws [--ai]"
+    echo "  $0 gcp [--ai]"
     exit 1
     ;;
 esac

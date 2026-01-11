@@ -1,35 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IP="${1:?Usage: ./install-ollama.sh <agent-ip>}"
+PROVIDER="${1:?Usage: install-llm.sh <aws|gcp|azure> <agent-index>}"
+AGENT_INDEX="${2:?Missing agent index}"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-ENV_FILE="${ROOT_DIR}/ec2-instances.env"
+case "${PROVIDER}" in
+  aws)   ENV_FILE="${ROOT_DIR}/ec2-instances.env" ;;
+  gcp)   ENV_FILE="${ROOT_DIR}/gcp-instances.env" ;;
+  azure) ENV_FILE="${ROOT_DIR}/azure-instances.env" ;;
+  *)
+    echo "ERROR: Unknown provider: ${PROVIDER}"
+    exit 1
+    ;;
+esac
 
-# ---------- Pre-flight ----------
 [[ -f "${ENV_FILE}" ]] || {
-  echo "ERROR: ${ENV_FILE} not found. Run create-vm first."
+  echo "ERROR: State file not found: ${ENV_FILE}"
   exit 1
 }
 
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
-[[ -f "${SSH_KEY_PRIVATE}" ]] || {
-  echo "ERROR: SSH key not found at ${SSH_KEY_PRIVATE}"
+IDX=$((AGENT_INDEX - 1))
+
+AGENT_PUBLIC_IP="${AGENT_PUBLIC_IPS[$IDX]:-}"
+[[ -n "${AGENT_PUBLIC_IP}" ]] || {
+  echo "ERROR: Invalid agent index ${AGENT_INDEX}"
   exit 1
 }
 
-echo "==> Installing Ollama on agent ${IP}"
+echo "==> Installing LLM on ${PROVIDER} agent ${AGENT_INDEX} (${AGENT_PUBLIC_IP})"
 
-ssh -i "${SSH_KEY_PRIVATE}" -t \
+ssh -i "${SSH_KEY_PRIVATE}" \
   -o StrictHostKeyChecking=no \
-  "${SSH_USER}@${IP}" \
-  bash -s <<'EOF'
-set -euo pipefail
-
+  "${SSH_USER}@${AGENT_PUBLIC_IP}" <<'EOF'
+set -e
 echo "==> Installing dependencies"
 sudo apt update
 sudo apt install -y curl ca-certificates
@@ -52,13 +60,15 @@ echo "==> Ollama status:"
 sudo systemctl status ollama --no-pager
 EOF
 
+echo "==> LLM installed on agent ${AGENT_INDEX}"
+
 echo
 echo "================================================"
 echo "Ollama installed successfully"
-echo "Agent IP: ${IP}"
+echo "Agent IP: ${AGENT_PUBLIC_IP}"
 echo "Local API endpoint:"
-echo "  http://${IP}:11434"
+echo "  http://${AGENT_PUBLIC_IP}:11434"
 echo
 echo "Test:"
-echo "  curl http://${IP}:11434/api/tags"
+echo "  curl http://${AGENT_PUBLIC_IP}:11434/api/tags"
 echo "================================================"
