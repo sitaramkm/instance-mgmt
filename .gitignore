@@ -3,3 +3,4 @@
 .ssh
 .DS_Store
 .vscode
+common.env
