@@ -84,6 +84,65 @@ AGENT_TAG="swa-agent"
 # Installing AGENTS VM's first (can fail when using GPUs and resource quota issues)
 # ==================================================================================
 
+userdata_server() {
+cat <<'EOF'
+#cloud-config
+package_update: true
+packages:
+  - ufw
+  - openssh-server
+  - net-tools
+
+runcmd:
+  - systemctl enable --now ssh
+  - ufw allow OpenSSH
+  - ufw allow 8081/tcp
+  - ufw --force enable
+EOF
+}
+
+userdata_agent() {
+cat <<'EOF'
+#cloud-config
+package_update: true
+packages:
+  - ufw
+  - openssh-server
+  - net-tools
+  - curl
+  - unzip
+  - python3
+  - python3-pip
+  - python3-venv
+  - git
+  - build-essential
+
+runcmd:
+  - systemctl enable --now ssh
+  - ufw allow OpenSSH
+  - ufw --force enable
+
+  - echo "==> Installing AWS CLI (arch-aware)"
+  - |
+      set -e
+      ARCH="$(uname -m)"
+      if [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
+        AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+      else
+        AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+      fi
+      curl -fsSL "${AWSCLI_ZIP_URL}" -o "/tmp/awscliv2.zip"
+      rm -rf /tmp/awscliv2
+      unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2
+      sudo /tmp/awscliv2/aws/install || sudo /tmp/awscliv2/aws/install --update
+      aws --version
+      rm -rf /tmp/awscliv2 /tmp/awscliv2.zip
+
+  - echo "==> Installing Python packages for agent demo"
+  - pip3 install --no-cache-dir requests boto3
+EOF
+}
+# ============================================================
 AGENT_NAMES=()
 AGENT_IPS=()
 AGENT_PUBLIC_IPS=()
@@ -93,6 +152,9 @@ if [[ -n "${AGENT_DISK_SIZE_GB}" ]]; then
   DISK_FLAG="--boot-disk-size=${AGENT_DISK_SIZE_GB}GB"
 fi
 echo "==> Creating ${NUM_AGENTS} agent VMs of type ${AGENT_MACHINE_TYPE}"
+UD_AGENT="$(mktemp)"
+userdata_agent > "${UD_AGENT}"
+
 for ZONE in ${GCP_ZONES}; do
   echo "==> Creating VMs in zone ${ZONE}"
 
@@ -109,6 +171,7 @@ for ZONE in ${GCP_ZONES}; do
       --image-project="${GCP_IMAGE_PROJECT}" \
       --tags="${AGENT_TAG}" \
       --metadata="ssh-keys=${SSH_METADATA}" \
+      --metadata-from-file=user-data="${UD_AGENT}" \
       ${DISK_FLAG} \
       $(gcp_scheduling_flags "${AGENT_MACHINE_TYPE}") \
       --quiet || break
@@ -138,6 +201,8 @@ echo "==> VMs created in ${SELECTED_ZONE}"
 # ============================================================
 # SERVER (only after agent vms succeed)
 # ============================================================
+UD_SERVER="$(mktemp)"
+userdata_server > "${UD_SERVER}"
 
 echo "==> Creating server in ${SELECTED_ZONE}"
 
@@ -149,6 +214,7 @@ gcloud compute instances create "${SERVER_NAME}" \
   --image-project="${GCP_IMAGE_PROJECT}" \
   --tags="${SERVER_TAG}" \
   --metadata="ssh-keys=${SSH_METADATA}" \
+  --metadata-from-file=user-data="${UD_SERVER}" \
   --quiet
 
 # ---------- Capture IPs ----------
