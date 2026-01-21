@@ -3,15 +3,15 @@
 ## Supported providers
   - Multipass
   - AWS
-  - GCP (TODO)
+  - GCP 
   - Azure (TODO)
 
 This repository provides simple shell scripts to create and destroy
-**Ubuntu-based server and agent VMs** locally (Multipass) or in **AWS EC2**.
+**Ubuntu-based server and agent VMs** locally (Multipass) or in **AWS EC2**, **GCP**, **Azure**.
 
 It supports:
 - One **server** VM
-- One or more **agent** VMs
+- One **agent** VM
 - **LLM workloads using Ollama**
 - Clean teardown
 
@@ -19,18 +19,16 @@ It supports:
 
 ## Configuration (`common.env`)
 
-All defaults are in `common.env`.
+All defaults must be in `common.env`. Copy `common.env.example` as `common.env`
 
 ```bash
-# Number of agent VMs
-NUM_AGENTS=1
 
 # SSH user
 SSH_USER=ubuntu
 
 # Naming
 SERVER_NAME=server-01
-AGENT_NAME_PREFIX=agent
+AGENT_NAME=agent-01
 
 # AWS
 AWS_PROFILE=sitaram
@@ -66,7 +64,7 @@ Run: aws configure or aws sso login
 ssh -i '/full/path/.ssh/ec2_rsa' ubuntu@<server-ip>
 ssh -i '/full/path/.ssh/ec2_rsa' ubuntu@<agent-ip>
 
-./scripts/destroy-vm.sh <provider> [multipass, aws]
+./scripts/destroy-vm.sh <provider> [multipass, aws, gcp, azure]
 ```
 
 ## Install Ollama 
@@ -80,16 +78,16 @@ What it does:
 
 ```bash
 # Install ollama 
-./scripts/install-llm.sh <agent-public-ip>
+./scripts/install-llm.sh aws|gcp|azure
 
 # Example
-./scripts/install-llm.sh 3.145.xxx.xxx
+./scripts/install-llm.sh aws|gcp|azure
 ```
 
 ## instances.env (Generated File)
 After VM creation, **[PROVIDER]-instances.env** is generated.
 
-For e.g `mp-instances.env`, `ec2-instances.env`, etc.
+For e.g `mp-instances.env`, `aws-instances.env`, etc.
 
 It contains:
 - SSH key path
@@ -103,6 +101,6 @@ Applies to:
 - SSH (22)
 - Ollama (11434, agents only)
 ```bash
-./scripts/aws/ec2-allow.sh allow 203.0.113.5/32
+./scripts/gcp/gcp-allow.sh allow 203.0.113.5/32
 ./scripts/aws/ec2-allow.sh allow 10.0.0.0/16
 ```
