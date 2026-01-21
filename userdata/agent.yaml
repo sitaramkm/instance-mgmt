@@ -1,0 +1,79 @@
+#cloud-config
+packages:
+  - curl
+  - unzip
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-boto3
+  - git
+  - build-essential
+  - file
+
+runcmd:
+  - echo "==> Installing AWS CLI (clean + arch-safe)"
+  - |
+      bash <<'EOF'
+      set -euo pipefail
+
+      OS="$(uname -s)"
+      ARCH="$(uname -m)"
+
+      echo "Detected OS=${OS} ARCH=${ARCH}"
+
+      if [[ "${OS}" != "Linux" ]]; then
+        echo "Non-Linux OS; skipping AWS CLI install"
+        exit 0
+      fi
+
+      case "${ARCH}" in
+        x86_64)
+          AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+          EXPECTED_ARCH="x86-64"
+          ;;
+        aarch64|arm64)
+          AWSCLI_ZIP_URL="https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip"
+          EXPECTED_ARCH="aarch64"
+          ;;
+        *)
+          echo "Unsupported architecture: ${ARCH}"
+          exit 0
+          ;;
+      esac
+
+      echo "Using AWS CLI package: ${AWSCLI_ZIP_URL}"
+
+      echo "==> Removing any existing AWS CLI install"
+      rm -rf /usr/local/aws-cli /usr/local/bin/aws || true
+
+      echo "==> Downloading AWS CLI"
+      curl -fsSL "${AWSCLI_ZIP_URL}" -o /tmp/awscliv2.zip
+      unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2
+
+      echo "==> Installing AWS CLI"
+      /tmp/awscliv2/aws/install
+
+      echo "==> Verifying AWS CLI architecture"
+      AWS_BIN="/usr/local/aws-cli/v2/current/dist/aws"
+
+      if [[ ! -x "${AWS_BIN}" ]]; then
+        echo "ERROR: aws binary not found at ${AWS_BIN}"
+        exit 1
+      fi
+
+      BIN_INFO="$(file "${AWS_BIN}")"
+      echo "${BIN_INFO}"
+
+      if ! echo "${BIN_INFO}" | grep -qi "${EXPECTED_ARCH}"; then
+        echo "ERROR: AWS CLI architecture mismatch"
+        echo "Expected: ${EXPECTED_ARCH}"
+        echo "Actual:   ${BIN_INFO}"
+        exit 1
+      fi
+
+      aws --version
+
+      rm -rf /tmp/awscliv2 /tmp/awscliv2.zip
+      EOF
+
+  - echo "==> User data installation complete"

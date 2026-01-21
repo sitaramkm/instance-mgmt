@@ -14,6 +14,8 @@ ENV_FILE="${ROOT_DIR}/gcp-instances.env"
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
+: "${GCP_PROJECT_ID:?Missing GCP_PROJECT_ID in gcp-instances.env}"
+
 command -v gcloud >/dev/null || {
   echo "ERROR: gcloud not installed"
   exit 1
@@ -24,27 +26,8 @@ gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q . ||
   exit 1
 }
 
-ensure_agent_to_server_8081() {
-  local rule_name="swa-agent-to-server-8081"
-
-  if gcloud compute firewall-rules describe "${rule_name}" \
-       --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
-    echo "--> Agent->server rule already exists: tcp/8081"
-    return
-  fi
-
-  echo "--> Creating agent->server rule: tcp/8081"
-
-  gcloud compute firewall-rules create "${rule_name}" \
-    --project="${GCP_PROJECT_ID}" \
-    --direction=INGRESS \
-    --priority=1000 \
-    --network=default \
-    --action=ALLOW \
-    --rules=tcp:8081 \
-    --source-tags=swa-agent \
-    --target-tags=swa-server
-}
+SERVER_TAG="${SERVER_NETWORK_TAG:-swa-server}"
+AGENT_TAG="${AGENT_NETWORK_TAG:-swa-agent}"
 
 # ---------- Normalize IP/CIDR ----------
 normalize_cidr() {
@@ -78,29 +61,48 @@ sanitize_cidr_for_name() {
 CIDR="$(normalize_cidr "${RAW_INPUT}")"
 
 echo "==> Applying GCP firewall rules for ${CIDR}"
-
+echo "--> Tags: server='${SERVER_TAG}', agent='${AGENT_TAG}'"
 
 RULE_NAME="swa-allow-$(sanitize_cidr_for_name "${CIDR}")"
 
-# Check if rule already exists
+# ---------- SSH + agent access ----------
 if gcloud compute firewall-rules describe "${RULE_NAME}" \
-     --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
   echo "--> Firewall rule already exists: ${RULE_NAME}"
-  exit 0
+else
+  gcloud compute firewall-rules create "${RULE_NAME}" \
+    --project="${GCP_PROJECT_ID}" \
+    --direction=INGRESS \
+    --priority=1000 \
+    --network=default \
+    --action=ALLOW \
+    --rules=tcp:22,tcp:11434 \
+    --source-ranges="${CIDR}" \
+    --target-tags="${SERVER_TAG},${AGENT_TAG}" \
+    --description="managed-by=swa"
+  echo "==> Firewall rule created: ${RULE_NAME}"
 fi
 
-# Create rule
-gcloud compute firewall-rules create "${RULE_NAME}" \
-  --project="${GCP_PROJECT_ID}" \
-  --direction=INGRESS \
-  --priority=1000 \
-  --network=default \
-  --action=ALLOW \
-  --rules=tcp:22,tcp:11434 \
-  --source-ranges="${CIDR}" \
-  --target-tags=swa-server,swa-agent
+# ---------- Agent -> Server (8081) ----------
+AGENT_SERVER_RULE="swa-agent-to-server-8081"
 
-ensure_agent_to_server_8081
+if gcloud compute firewall-rules describe "${AGENT_SERVER_RULE}" \
+  --project="${GCP_PROJECT_ID}" >/dev/null 2>&1; then
+  echo "--> Agent->server rule already exists: tcp/8081"
+else
+  echo "--> Creating agent->server rule: tcp/8081"
 
-echo "==> Firewall rule created: ${RULE_NAME}"
-echo "    Allowed IP/CIDR: ${CIDR}"
+  gcloud compute firewall-rules create "${AGENT_SERVER_RULE}" \
+    --project="${GCP_PROJECT_ID}" \
+    --direction=INGRESS \
+    --priority=1000 \
+    --network=default \
+    --action=ALLOW \
+    --rules=tcp:8081 \
+    --source-tags="${AGENT_TAG}" \
+    --target-tags="${SERVER_TAG}" \
+    --description="managed-by=swa"
+fi
+
+echo "==> Allowed IP/CIDR: ${CIDR}"
+echo "==> Completed GCP firewall configuration"

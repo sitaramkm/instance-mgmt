@@ -1,79 +1,111 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ------------------------------------------------------------
-# Cleanup EC2 instances and security groups created by this repo
-# Scoped strictly to instances.env
-# ------------------------------------------------------------
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+ENV_FILE="${ROOT_DIR}/aws-instances.env"
 
-
-INSTANCES_ENV="${ROOT_DIR}/ec2-instances.env"
-
-[[ -f "${INSTANCES_ENV}" ]] || {
-  echo "ERROR: ec2-instances.env not found. Nothing to clean up."
+[[ -f "${ENV_FILE}" ]] || {
+  echo "ERROR: ${ENV_FILE} not found"
   exit 1
 }
 
 # shellcheck disable=SC1090
-source "${INSTANCES_ENV}"
+source "${ENV_FILE}"
 
-: "${AWS_REGION:?Missing AWS_REGION in ${INSTANCES_ENV}}"
-: "${AWS_PROFILE:?Missing AWS_PROFILE in ${INSTANCES_ENV}}"
-: "${SERVER_INSTANCE_ID:?Missing SERVER_INSTANCE_ID in ${INSTANCES_ENV}}"
-: "${SERVER_SECURITY_GROUP_ID:?Missing SERVER_SECURITY_GROUP_ID in ${INSTANCES_ENV}}"
-: "${AGENT_SECURITY_GROUP_ID:?Missing AGENT_SECURITY_GROUP_ID in ${INSTANCES_ENV}}"
+: "${AWS_PROFILE:?Missing AWS_PROFILE in ${ENV_FILE}}"
+: "${AWS_REGION:?Missing AWS_REGION in ${ENV_FILE}}"
 
-aws --profile "${AWS_PROFILE}" sts get-caller-identity >/dev/null 2>&1 || {
+command -v aws >/dev/null || {
+  echo "ERROR: aws cli not installed"
+  exit 1
+}
+
+aws --profile "${AWS_PROFILE}" sts get-caller-identity >/dev/null || {
   echo "ERROR: AWS CLI not authenticated"
   exit 1
 }
 
-aws_ec2() {
+awscli() {
   aws ec2 --region "${AWS_REGION}" --profile "${AWS_PROFILE}" "$@"
 }
 
-echo "==> Destroying EC2 instances (using ${INSTANCES_ENV})"
+# ---------- Terminate instances ----------
+echo "==> Terminating EC2 instances"
 
-# ------------------------------------------------------------
-# Terminate instances
-# ------------------------------------------------------------
-echo "--> Terminating server: ${SERVER_INSTANCE_ID}"
-aws_ec2 terminate-instances \
-  --instance-ids "${SERVER_INSTANCE_ID}" >/dev/null
+INSTANCE_IDS=()
 
-if [[ -n "${AGENT_INSTANCE_IDS[*]:-}" ]]; then
-  echo "--> Terminating agents: ${AGENT_INSTANCE_IDS[*]}"
-  aws_ec2 terminate-instances \
-    --instance-ids "${AGENT_INSTANCE_IDS[@]}" >/dev/null
+collect_instance_ids() {
+  local NAME="$1"
+  awscli describe-instances \
+    --filters "Name=tag:Name,Values=${NAME}" \
+    --query 'Reservations[*].Instances[*].InstanceId' \
+    --output text
+}
+
+INSTANCE_IDS+=( $(collect_instance_ids "${AGENT_NAME}") )
+INSTANCE_IDS+=( $(collect_instance_ids "${SERVER_NAME}") )
+
+if [[ "${#INSTANCE_IDS[@]}" -gt 0 ]]; then
+  echo "--> Terminating instances: ${INSTANCE_IDS[*]}"
+  awscli terminate-instances --instance-ids "${INSTANCE_IDS[@]}"
+else
+  echo "--> No instances found to terminate"
 fi
 
-# ------------------------------------------------------------
-# Wait for termination
-# ------------------------------------------------------------
-echo "==> Waiting for instances to terminate"
-
-IDS_TO_WAIT=("${SERVER_INSTANCE_ID}")
-if [[ -n "${AGENT_INSTANCE_IDS[*]:-}" ]]; then
-  IDS_TO_WAIT+=("${AGENT_INSTANCE_IDS[@]}")
+# ---------- Wait for termination ----------
+if [[ "${#INSTANCE_IDS[@]}" -gt 0 ]]; then
+  echo "==> Waiting for EC2 instances to fully terminate"
+  awscli wait instance-terminated --instance-ids "${INSTANCE_IDS[@]}"
 fi
 
-aws_ec2 wait instance-terminated \
-  --instance-ids "${IDS_TO_WAIT[@]}"
-
-# ------------------------------------------------------------
-# Delete security groups
-# ------------------------------------------------------------
+# ---------- Delete security groups (retry-aware) ----------
 echo "==> Deleting security groups"
 
-echo "--> Deleting server SG: ${SERVER_SECURITY_GROUP_ID}"
-aws_ec2 delete-security-group \
-  --group-id "${SERVER_SECURITY_GROUP_ID}" 
+delete_sg_with_retry() {
+  local SG_ID="$1"
+  local retries=12
+  local delay=5
 
-echo "--> Deleting agent SG: ${AGENT_SECURITY_GROUP_ID}"
-aws_ec2 delete-security-group \
-  --group-id "${AGENT_SECURITY_GROUP_ID}"
+  for ((i=1; i<=retries; i++)); do
+    ERR="$(
+      awscli delete-security-group \
+        --group-id "${SG_ID}" 2>&1 >/dev/null || true
+    )"
 
-echo "==> EC2 cleanup complete"
+    # Success
+    if [[ -z "${ERR}" ]]; then
+      echo "--> Deleted security group: ${SG_ID}"
+      return 0
+    fi
+
+    # Already deleted = success (idempotent)
+    if echo "${ERR}" | grep -q "InvalidGroup.NotFound"; then
+      echo "--> Security group ${SG_ID} already deleted"
+      return 0
+    fi
+
+    # Still attached → retry
+    if echo "${ERR}" | grep -q "DependencyViolation"; then
+      echo "--> SG ${SG_ID} still in use (attempt ${i}/${retries}), retrying in ${delay}s"
+      sleep "${delay}"
+      continue
+    fi
+
+    # Anything else is a real error
+    echo "ERROR: Failed to delete security group ${SG_ID}"
+    echo "${ERR}"
+    return 1
+  done
+
+  echo "ERROR: Timed out deleting security group ${SG_ID}"
+  return 1
+}
+
+
+for sg in "${AGENT_SECURITY_GROUP_ID:-}" "${SERVER_SECURITY_GROUP_ID:-}"; do
+  [[ -n "${sg}" ]] && delete_sg_with_retry "${sg}"
+done
+
+echo "==> AWS cleanup complete"
+

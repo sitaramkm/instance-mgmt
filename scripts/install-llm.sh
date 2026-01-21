@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROVIDER="${1:?Usage: install-llm.sh <aws|gcp|azure> <agent-index>}"
-AGENT_INDEX="${2:?Missing agent index}"
+PROVIDER="${1:?Usage: install-llm.sh <aws|gcp|azure>}"
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 case "${PROVIDER}" in
-  aws)   ENV_FILE="${ROOT_DIR}/ec2-instances.env" ;;
+  aws)   ENV_FILE="${ROOT_DIR}/aws-instances.env" ;;
   gcp)   ENV_FILE="${ROOT_DIR}/gcp-instances.env" ;;
   azure) ENV_FILE="${ROOT_DIR}/azure-instances.env" ;;
   *)
@@ -24,15 +23,12 @@ esac
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
-IDX=$((AGENT_INDEX - 1))
-
-AGENT_PUBLIC_IP="${AGENT_PUBLIC_IPS[$IDX]:-}"
 [[ -n "${AGENT_PUBLIC_IP}" ]] || {
-  echo "ERROR: Invalid agent index ${AGENT_INDEX}"
+  echo "ERROR: Invalid agent public ip for provider ${PROVIDER}"
   exit 1
 }
 
-echo "==> Installing LLM on ${PROVIDER} agent ${AGENT_INDEX} (${AGENT_PUBLIC_IP})"
+echo "==> Installing LLM on ${PROVIDER} agent (${AGENT_PUBLIC_IP})"
 
 ssh -i "${SSH_KEY_PRIVATE}" \
   -o StrictHostKeyChecking=no \
@@ -59,8 +55,6 @@ echo
 echo "==> Ollama status:"
 sudo systemctl status ollama --no-pager
 EOF
-
-echo "==> LLM installed on agent ${AGENT_INDEX}"
 
 echo
 echo "================================================"

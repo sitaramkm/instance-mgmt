@@ -1,0 +1,3 @@
+#cloud-config
+runcmd:
+  - ufw allow 8081/tcp
